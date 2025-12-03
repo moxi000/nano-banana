@@ -1,5 +1,5 @@
 <template>
-    <div class="bg-white border-4 border-black border-t-0 rounded-b-lg p-4 shadow-lg space-y-4">
+    <div :class="containerClass">
         <!-- Image Size Selection -->
         <div>
             <label class="block text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
@@ -42,13 +42,22 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+import { computed } from 'vue'
+
+const props = defineProps<{
     imageSize: string
     enableGoogleSearch: boolean
+    compact?: boolean
 }>()
 
 defineEmits<{
     'update:imageSize': [value: string]
     'update:enableGoogleSearch': [value: boolean]
 }>()
+
+const containerClass = computed(() =>
+    props.compact
+        ? 'bg-white border-2 border-black rounded-lg p-3 shadow-sm space-y-3'
+        : 'bg-white border-4 border-black border-t-0 rounded-b-lg p-4 shadow-lg space-y-4'
+)
 </script>

@@ -1,7 +1,14 @@
-import type { ApiModel, GenerateRequest, GenerateResponse, ModelListResponse } from '../types'
-import { DEFAULT_API_ENDPOINT, DEFAULT_MODEL_ID } from '../config/api'
+import type { ApiModel, ApiFormat, GenerateRequest, GenerateResponse, ModelListResponse } from '../types'
+import { DEFAULT_API_ENDPOINT, DEFAULT_GEMINI_ENDPOINT, DEFAULT_GEMINI_MODEL, DEFAULT_MODEL_ID } from '../config/api'
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 export async function generateImage(request: GenerateRequest, maxRetries: number = 5): Promise<GenerateResponse> {
+    const apiFormat: ApiFormat = request.apiFormat || 'openai'
+    if (apiFormat === 'gemini') {
+        return generateImageWithGemini(request)
+    }
+
     let lastError: Error | null = null
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -135,6 +142,151 @@ export async function generateImage(request: GenerateRequest, maxRetries: number
 
     // 所有重试都失败后，抛出最后一次的错误
     throw new Error(`在 ${maxRetries} 次尝试后仍未能生成图片。最后错误: ${lastError?.message || '未知错误'}`)
+}
+
+async function generateImageWithGemini(request: GenerateRequest): Promise<GenerateResponse> {
+    const modelId = (request.model || DEFAULT_GEMINI_MODEL).trim()
+    const apiKey = request.apikey
+
+    const userPrompt = request.prompt
+    if (!apiKey) {
+        throw new Error('缺少 Gemini API Key')
+    }
+
+    const parts: any[] = []
+    if (userPrompt) {
+        parts.push({ text: userPrompt })
+    }
+
+    const imagePromises = request.images.map(async image => {
+        const { data, mimeType } = await toInlineData(image)
+        return {
+            inlineData: {
+                data,
+                mimeType
+            }
+        }
+    })
+
+    const imageParts = await Promise.all(imagePromises)
+    parts.push(...imageParts)
+
+    const payload: any = {
+        contents: parts.length ? [{ role: 'user', parts }] : [{ role: 'user', parts: [{ text: '' }] }]
+    }
+
+    if (request.aspectRatio || request.imageSize) {
+        payload.generationConfig = { imageConfig: {} }
+        if (request.aspectRatio) {
+            payload.generationConfig.imageConfig.aspectRatio = request.aspectRatio
+        }
+        if (request.imageSize) {
+            payload.generationConfig.imageConfig.imageSize = request.imageSize
+        }
+    }
+    if (request.enableGoogleSearch) {
+        payload.tools = [{ googleSearch: {} }]
+    }
+
+    const endpointBase = (request.endpoint || DEFAULT_GEMINI_ENDPOINT).replace(/\/$/, '')
+    const url = `${endpointBase}/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(apiKey)}`
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    })
+
+    if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Gemini 请求失败 ${response.status}: ${errorText}`)
+    }
+
+    const data = await response.json()
+    const imageUrl = extractImageFromGemini(data)
+    if (imageUrl) {
+        return { imageUrl }
+    }
+
+    const text = extractTextFromGemini(response)
+    if (text) {
+        throw new Error(`Gemini 返回文本：${text}`)
+    }
+
+    throw new Error('Gemini 未返回有效图片')
+}
+
+function extractImageFromGemini(payload: any): string | null {
+    if (!payload?.candidates?.length) return null
+    for (const candidate of payload.candidates) {
+        const parts = candidate?.content?.parts
+        if (!Array.isArray(parts)) continue
+        for (const part of parts) {
+            if (part?.inlineData?.data) {
+                const mimeType = part.inlineData.mimeType || 'image/png'
+                return `data:${mimeType};base64,${part.inlineData.data}`
+            }
+            if (typeof part?.text === 'string' && part.text.startsWith('data:image/')) {
+                return part.text
+            }
+        }
+    }
+    return null
+}
+
+function extractTextFromGemini(payload: any): string | null {
+    if (!payload?.candidates?.length) return null
+    for (const candidate of payload.candidates) {
+        const parts = candidate?.content?.parts
+        if (!Array.isArray(parts)) continue
+        for (const part of parts) {
+            if (typeof part?.text === 'string' && part.text.trim()) {
+                return part.text
+            }
+        }
+    }
+    return null
+}
+
+async function toInlineData(image: string): Promise<{ data: string; mimeType: string }> {
+    if (image.startsWith('data:')) {
+        const match = image.match(/^data:(.+?);base64,(.+)$/)
+        if (match) {
+            return { mimeType: match[1], data: match[2] }
+        }
+    }
+
+    const response = await fetch(image)
+    if (!response.ok) {
+        throw new Error(`无法获取图片数据: ${response.status}`)
+    }
+    const contentType = response.headers.get('Content-Type') || 'image/png'
+    const arrayBuffer = await response.arrayBuffer()
+    const base64 = arrayBufferToBase64(arrayBuffer)
+    return { mimeType: contentType, data: base64 }
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+    let binary = ''
+    const bytes = new Uint8Array(buffer)
+    const chunkSize = 0x8000
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize)
+        binary += String.fromCharCode(...chunk)
+    }
+    return encodeBinaryToBase64(binary)
+}
+
+function encodeBinaryToBase64(binary: string): string {
+    if (typeof btoa === 'function') {
+        return btoa(binary)
+    }
+    if (typeof Buffer !== 'undefined') {
+        return Buffer.from(binary, 'binary').toString('base64')
+    }
+    throw new Error('无法进行 base64 编码')
 }
 
 export async function fetchModels(apikey: string, endpoint: string): Promise<ApiModel[]> {

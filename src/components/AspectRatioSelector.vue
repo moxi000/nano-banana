@@ -1,5 +1,5 @@
 <template>
-    <div class="bg-white border-4 border-black border-t-0 rounded-b-lg p-4 shadow-lg">
+    <div :class="containerClass">
         <label class="block text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
             📐 图像宽高比
         </label>
@@ -31,6 +31,7 @@ const props = defineProps<{
     modelValue: string
     modelType?: string
     imageSize?: string
+    compact?: boolean
 }>()
 
 defineEmits<{
@@ -103,4 +104,10 @@ const aspectRatioOptions = computed(() => {
     }
     return defaultAspectRatioOptions
 })
+
+const containerClass = computed(() =>
+    props.compact
+        ? 'bg-white border-2 border-black rounded-lg p-3 shadow-sm'
+        : 'bg-white border-4 border-black border-t-0 rounded-b-lg p-4 shadow-lg'
+)
 </script>

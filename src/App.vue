@@ -45,6 +45,7 @@
                         v-model="apiKey"
                         v-model:endpoint="apiEndpoint"
                         v-model:model="selectedModel"
+                        v-model:apiFormat="apiFormat"
                         :models="modelOptions"
                         :model-loading="isFetchingModels"
                         :model-error="modelsError"
@@ -54,66 +55,149 @@
                 </div>
             </div>
 
-            <!-- 功能布局 -->
-            <div class="grid lg:grid-cols-2 gap-4 lg:gap-6 mb-6 lg:items-start">
-                <!-- 灵感工坊 -->
-                <div class="flex flex-col h-full gap-4">
-                    <div class="flex flex-col h-full">
-                        <div class="bg-gradient-to-r from-blue-400 to-purple-500 text-white font-bold px-4 py-2 rounded-t-lg border-4 border-black border-b-0 flex items-center gap-2">
-                            ✨ 文生图 · 灵感工坊
-                        </div>
-                        <div class="bg-white border-4 border-black border-t-0 rounded-b-lg p-5 shadow-lg flex flex-col h-full gap-4">
-                            <div class="flex flex-col gap-3 flex-1">
-                                <label class="font-bold flex items-center gap-2 text-base">🍌 输入你的创意描述：</label>
+            <!-- 统一创作面板 -->
+            <div class="mb-6">
+                <div class="bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 text-white font-black px-4 py-3 rounded-t-lg border-4 border-black border-b-0 flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-2">
+                        <span>🍌 多模态创作工坊</span>
+                        <span class="px-3 py-1 rounded-full bg-white text-black text-sm border-2 border-black">{{ modeLabel }}</span>
+                    </div>
+                    <span class="text-sm font-semibold text-white/90">不上传图片=文生图；上传图片=图文生图</span>
+                </div>
+                <div class="bg-white border-4 border-black border-t-0 rounded-b-lg p-5 shadow-lg flex flex-col gap-4">
+                    <div class="grid lg:grid-cols-2 gap-4 items-stretch">
+                        <div class="flex flex-col gap-3 h-full bg-white border-4 border-black rounded-lg p-4">
+                            <label class="font-bold flex items-center gap-2 text-base">
+                                ✏️ 描述你的创意：
+                                <span class="px-2 py-1 rounded-full border-2 border-black bg-yellow-100 text-xs text-gray-800">必填</span>
+                            </label>
+                            <div class="flex-1">
                                 <textarea
-                                    v-model="textToImagePrompt"
+                                    v-model="promptInput"
                                     placeholder="例如：阳光洒在香蕉形热气球上，漂浮在糖果色的天空中"
-                                    class="w-full px-4 py-3 border-2 border-black rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent min-h-[160px] flex-1"
+                                    class="w-full px-4 py-3 border-2 border-black rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent h-full min-h-[220px]"
                                 />
                             </div>
-
                             <p class="text-sm text-gray-600 font-medium flex items-center gap-2">
                                 <span>💡</span>
-                                <span>填写描述后，使用下方按钮开始创作，生成的图片会展示在下方结果区，可直接下载或继续改图。</span>
+                                <span>填写描述后即可生成；若上传图片，则配合提示词进行图文生图。</span>
                             </p>
                         </div>
+
+                        <div class="flex flex-col h-full bg-white border-4 border-black rounded-lg p-4">
+                            <div class="font-bold text-base mb-2 flex items-center gap-2">📷 上传参考图片（可选）</div>
+                            <div class="flex-1 flex">
+                                <ImageUpload v-model="selectedImages" />
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- 宽高比选择器（仅当选择 Gemini 2.5 Flash Image 系列模型时显示） -->
-                    <div v-if="showAspectRatioSelector" class="flex flex-col">
-                        <div class="bg-gradient-to-r from-purple-400 to-pink-500 text-white font-bold px-4 py-2 rounded-t-lg border-4 border-black border-b-0 flex items-center gap-2">
-                            📐 图像宽高比
-                        </div>
-                        <AspectRatioSelector v-model="selectedAspectRatio" :model-type="showGemini3ProConfig ? 'gemini-3-pro-image' : 'default'" :image-size="gemini3ImageSize" />
-                    </div>
-
-                    <!-- Gemini 3 Pro Image 配置（仅当选择 Gemini 3 Pro Image 模型时显示） -->
-                    <div v-if="showGemini3ProConfig" class="flex flex-col">
-                        <div class="bg-gradient-to-r from-indigo-400 to-purple-500 text-white font-bold px-4 py-2 rounded-t-lg border-4 border-black border-b-0 flex items-center gap-2">
-                            🚀 Gemini 3 Pro Image 配置
-                        </div>
+                    <div v-if="showAspectRatioSelector || showGemini3ProConfig" class="grid lg:grid-cols-2 gap-4">
+                        <AspectRatioSelector
+                            v-if="showAspectRatioSelector"
+                            v-model="selectedAspectRatio"
+                            :model-type="showGemini3ProConfig ? 'gemini-3-pro-image' : 'default'"
+                            :image-size="gemini3ImageSize"
+                            compact
+                        />
                         <Gemini3ProConfig
+                            v-if="showGemini3ProConfig"
                             v-model:imageSize="gemini3ImageSize"
                             v-model:enableGoogleSearch="gemini3EnableGoogleSearch"
+                            compact
                         />
                     </div>
                 </div>
+            </div>
 
-                <!-- 图文生图流程 -->
-                <div class="flex flex-col gap-4 h-full">
-                    <div class="flex flex-col h-full">
-                        <div class="bg-pink-400 text-white font-bold px-4 py-2 rounded-t-lg border-4 border-black border-b-0 flex items-center gap-2">🍌 图文生图 · 上传图片</div>
-                        <div class="flex-1">
-                            <ImageUpload v-model="selectedImages" />
+            <!-- 批量处理配置 -->
+            <div class="mb-6">
+                <div class="bg-gradient-to-r from-amber-400 to-lime-400 text-black font-bold px-4 py-2 rounded-t-lg border-4 border-black border-b-0 flex items-center gap-2">
+                    ⚡ 批量处理 · 配置
+                </div>
+                <div class="bg-white border-4 border-black border-t-0 rounded-b-lg p-5 shadow-lg space-y-4">
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="flex flex-col gap-1">
+                            <p class="font-bold text-base flex items-center gap-2">🎛️ 手动开启批处理</p>
+                            <p class="text-gray-600 text-sm">一次请求也可带多张图，需主动开启批处理模式</p>
                         </div>
+                        <button
+                            @click="batchEnabled = !batchEnabled"
+                            :class="[
+                                'w-16 h-9 rounded-full border-4 border-black flex items-center px-1 transition-all shadow-lg',
+                                batchEnabled ? 'bg-green-400' : 'bg-gray-300'
+                            ]"
+                            type="button"
+                        >
+                            <span
+                                :class="[
+                                    'w-6 h-6 bg-white border-2 border-black rounded-full transition-all',
+                                    batchEnabled ? 'translate-x-7' : ''
+                                ]"
+                            />
+                        </button>
                     </div>
 
-                    <div class="flex flex-col h-full">
-                        <div class="bg-gradient-to-r from-green-400 to-blue-500 text-white font-bold px-4 py-2 rounded-t-lg border-4 border-black border-b-0 flex items-center gap-2">
-                            🎨 图文生图 · 选择风格或自定义提示词
+                    <div v-if="batchEnabled" class="space-y-4">
+                        <div class="flex flex-wrap gap-3 items-center">
+                            <span class="font-bold text-sm text-gray-800">处理方式：</span>
+                            <label class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-black cursor-pointer bg-orange-100 hover:bg-orange-200 transition">
+                                <input v-model="batchMode" type="radio" value="concurrent" class="accent-black" />
+                                <span class="font-bold">并发</span>
+                            </label>
+                            <label class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-black cursor-pointer bg-blue-100 hover:bg-blue-200 transition">
+                                <input v-model="batchMode" type="radio" value="queue" class="accent-black" />
+                                <span class="font-bold">排队</span>
+                            </label>
                         </div>
-                        <div class="flex-1">
-                            <StylePromptSelector v-model:selectedStyle="selectedStyle" v-model:customPrompt="customPrompt" :templates="styleTemplates" />
+
+                        <div v-if="batchMode === 'concurrent'" class="space-y-2">
+                            <label class="font-bold text-sm text-gray-800 flex items-center gap-2">
+                                🔀 并发数量
+                                <span class="text-xs text-gray-600">(1-8)</span>
+                            </label>
+                            <input
+                                v-model.number="concurrencyLimit"
+                                type="number"
+                                min="1"
+                                max="8"
+                                class="w-full border-2 border-black rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-400 focus:outline-none"
+                            />
+                            <p class="text-xs text-gray-600">并发越高越快，但请注意 API 限流。</p>
+                            <p class="text-xs text-gray-600">同批并发请求启动间隔固定 0.5 秒。</p>
+                        </div>
+
+                        <div v-if="batchMode === 'queue'" class="space-y-2">
+                            <label class="font-bold text-sm text-gray-800 flex items-center gap-2">
+                                ⏳ 队列冷却时间 (ms)
+                            </label>
+                            <input
+                                v-model.number="queueCooldownMs"
+                                type="number"
+                                min="0"
+                                step="100"
+                                class="w-full border-2 border-black rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                            />
+                            <p class="text-xs text-gray-600">每张图片之间的等待时间，避免触发限流。</p>
+                        </div>
+
+                        <div v-if="batchMode === 'concurrent'" class="space-y-2">
+                            <label class="font-bold text-sm text-gray-800 flex items-center gap-2">
+                                🧊 批次冷却时间 (ms)
+                            </label>
+                            <input
+                                v-model.number="batchCooldownMs"
+                                type="number"
+                                min="0"
+                                step="100"
+                                class="w-full border-2 border-black rounded-lg px-3 py-2 focus:ring-2 focus:ring-lime-400 focus:outline-none"
+                            />
+                            <p class="text-xs text-gray-600">一批完成后等待多久再开始下一批（并发模式）。</p>
+                        </div>
+
+                        <div class="p-3 rounded-lg border-2 border-dashed border-black bg-yellow-50 text-sm text-gray-800 flex items-start gap-2">
+                            <span>💡</span>
+                            <p>批处理会按上传顺序逐张生成，并支持批量下载；不开启时则按单次请求处理所有上传图片。</p>
                         </div>
                     </div>
                 </div>
@@ -121,36 +205,20 @@
 
             <!-- 生成按钮 -->
             <div class="mb-6">
-                <div class="flex flex-col gap-4 lg:flex-row lg:gap-6">
-                    <button
-                        @click="handleTextToImageGenerate"
-                        :disabled="!canGenerateTextImage"
-                        :class="[
-                            'flex-1 px-6 py-4 rounded-lg font-bold text-white text-lg transition-all duration-200 flex items-center justify-center gap-3 border-4 border-black shadow-lg',
-                            canGenerateTextImage
-                                ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 hover:-translate-y-1 hover:shadow-xl'
-                                : 'bg-gray-400 cursor-not-allowed'
-                        ]"
-                    >
-                        <span v-if="!isTextToImageLoading" class="flex items-center gap-2 text-xl">🍌 施展魔法（文生图）</span>
-                        <span v-else class="flex items-center gap-2 text-xl">🍌 正在施法...</span>
-                        <div v-if="isTextToImageLoading" class="w-8 h-8 border-3 border-white/30 border-t-white rounded-full animate-spin" />
-                    </button>
-                    <button
-                        @click="handleGenerate"
-                        :disabled="!canGenerate"
-                        :class="[
-                            'flex-1 px-6 py-4 rounded-lg font-bold text-white text-lg transition-all duration-200 flex items-center justify-center gap-3 border-4 border-black shadow-lg',
-                            canGenerate
-                                ? 'bg-gradient-to-r from-orange-400 to-yellow-500 hover:from-orange-500 hover:to-yellow-600 hover:-translate-y-1 hover:shadow-xl'
-                                : 'bg-gray-400 cursor-not-allowed'
-                        ]"
-                    >
-                        <span v-if="!isLoading" class="flex items-center gap-2 text-xl">🍌 施展魔法（图文生图）</span>
-                        <span v-else class="flex items-center gap-2 text-xl">🍌 正在施法...</span>
-                        <div v-if="isLoading" class="w-8 h-8 border-3 border-white/30 border-t-white rounded-full animate-spin" />
-                    </button>
-                </div>
+                <button
+                    @click="handleGenerate"
+                    :disabled="!canGenerate"
+                    :class="[
+                        'w-full px-6 py-4 rounded-lg font-bold text-white text-lg transition-all duration-200 flex items-center justify-center gap-3 border-4 border-black shadow-lg',
+                        canGenerate
+                            ? 'bg-gradient-to-r from-orange-400 to-yellow-500 hover:from-orange-500 hover:to-yellow-600 hover:-translate-y-1 hover:shadow-xl'
+                            : 'bg-gray-400 cursor-not-allowed'
+                    ]"
+                >
+                    <span v-if="!isLoading" class="flex items-center gap-2 text-xl">🍌 施展魔法（{{ modeLabel }}）</span>
+                    <span v-else class="flex items-center gap-2 text-xl">🍌 正在施法...</span>
+                    <div v-if="isLoading" class="w-8 h-8 border-3 border-white/30 border-t-white rounded-full animate-spin" />
+                </button>
             </div>
 
             <!-- 生成结果区域：全宽 -->
@@ -158,11 +226,18 @@
                 <div class="bg-black text-white font-bold px-4 py-2 rounded-t-lg border-4 border-black border-b-0 flex items-center gap-2">✨ 生成结果</div>
                 <ResultDisplay
                     :result="displayResult"
+                    :result-list="displayResultList"
                     :loading="displayLoading"
+                    :batch-processing="isBatchProcessing"
                     :error="displayError"
                     :can-push="canPushDisplayResult"
                     @download="handleDownloadResult"
+                    @download-item="handleDownloadItem"
+                    @download-all="handleDownloadAll"
                     @push="handlePushDisplayResult"
+                    @push-item="handlePushItem"
+                    @retry-item="handleRetryItem"
+                    @update-item-prompt="handleUpdateItemPrompt"
                 />
             </div>
 
@@ -176,36 +251,37 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import ApiKeyInput from './components/ApiKeyInput.vue'
 import ImageUpload from './components/ImageUpload.vue'
-import StylePromptSelector from './components/StylePromptSelector.vue'
 import ResultDisplay from './components/ResultDisplay.vue'
 import Footer from './components/Footer.vue'
 import AspectRatioSelector from './components/AspectRatioSelector.vue'
 import Gemini3ProConfig from './components/Gemini3ProConfig.vue'
 import { fetchModels, generateImage } from './services/api'
-import { styleTemplates } from './data/templates'
 import { LocalStorage } from './utils/storage'
-import type { ApiModel, GenerateRequest, ModelOption } from './types'
-import { DEFAULT_API_ENDPOINT, DEFAULT_MODEL_ID } from './config/api'
+import type { ApiFormat, ApiModel, BatchResultItem, GenerateRequest, ModelOption } from './types'
+import { DEFAULT_API_ENDPOINT, DEFAULT_GEMINI_ENDPOINT, DEFAULT_GEMINI_MODEL, DEFAULT_MODEL_ID } from './config/api'
 
 const apiKey = ref('')
 const apiEndpoint = ref('')  // 改为空字符串，避免初始化时触发 watch
 const selectedImages = ref<string[]>([])
-const selectedStyle = ref('')
-const customPrompt = ref('')
+const promptInput = ref('')
+const apiFormat = ref<ApiFormat>('openai')
 const isLoading = ref(false)
 const result = ref<string | null>(null)
 const error = ref<string | null>(null)
-const textToImagePrompt = ref('')
-const textToImageResult = ref<string | null>(null)
-const textToImageError = ref<string | null>(null)
-const isTextToImageLoading = ref(false)
-const latestResultSource = ref<'text' | 'image' | null>(null)
 const showApiSettings = ref(false)
 const modelOptions = ref<ModelOption[]>([])
 const selectedModel = ref('')  // 改为空字符串，避免初始化时使用默认值
 const isFetchingModels = ref(false)
 const modelsError = ref<string | null>(null)
 const selectedAspectRatio = ref('1:1')  // 默认宽高比为 1:1
+const batchEnabled = ref(false)
+const batchMode = ref<'concurrent' | 'queue'>('concurrent')
+const concurrencyLimit = ref(2)
+const queueCooldownMs = ref(1200)
+const batchCooldownMs = ref(1000)
+const batchResults = ref<BatchResultItem[]>([])
+const currentBatchId = ref('')
+const lastBatchCompletedAt = ref<number | null>(null)
 let hasSyncedInitialEndpoint = false
 
 // Gemini 3 Pro Image 配置状态
@@ -214,7 +290,11 @@ const gemini3EnableGoogleSearch = ref(false)  // 默认不启用谷歌搜索
 
 // 组件挂载时从本地存储读取API密钥
 onMounted(() => {
-    const savedApiKey = LocalStorage.getApiKey()
+    const savedApiFormat = LocalStorage.getApiFormat()
+    if (savedApiFormat === 'gemini') {
+        apiFormat.value = 'gemini'
+    }
+    const savedApiKey = apiFormat.value === 'gemini' ? LocalStorage.getGeminiApiKey() : LocalStorage.getApiKey()
     const savedEndpoint = LocalStorage.getApiEndpoint()
     const savedModelId = LocalStorage.getModelId()
 
@@ -227,8 +307,9 @@ onMounted(() => {
     }
 
     // 先设置端点，再恢复模型缓存，最后设置模型ID
-    const endpointToUse = savedEndpoint.trim() || DEFAULT_API_ENDPOINT
-    const modelIdToUse = savedModelId.trim() || DEFAULT_MODEL_ID
+    const endpointToUse =
+        (apiFormat.value === 'gemini' ? savedEndpoint.trim() || DEFAULT_GEMINI_ENDPOINT : savedEndpoint.trim() || DEFAULT_API_ENDPOINT)
+    const modelIdToUse = savedModelId.trim() || (apiFormat.value === 'gemini' ? DEFAULT_GEMINI_MODEL : DEFAULT_MODEL_ID)
 
     // 恢复模型缓存
     restoreModelOptionsFromCache(endpointToUse)
@@ -249,9 +330,17 @@ watch(
     (newApiKey: string, previousApiKey?: string) => {
         const trimmed = newApiKey.trim()
         if (trimmed) {
-            LocalStorage.saveApiKey(trimmed)
+            if (apiFormat.value === 'gemini') {
+                LocalStorage.saveGeminiApiKey(trimmed)
+            } else {
+                LocalStorage.saveApiKey(trimmed)
+            }
         } else {
-            LocalStorage.clearApiKey()
+            if (apiFormat.value === 'gemini') {
+                LocalStorage.clearGeminiApiKey()
+            } else {
+                LocalStorage.clearApiKey()
+            }
             if ((previousApiKey || '').trim()) {
                 LocalStorage.clearModelCache()
                 modelOptions.value = []
@@ -296,6 +385,25 @@ watch(
 )
 
 watch(
+    apiFormat,
+    newFormat => {
+        LocalStorage.saveApiFormat(newFormat)
+        if (newFormat === 'gemini') {
+            apiEndpoint.value = DEFAULT_GEMINI_ENDPOINT
+            selectedModel.value = DEFAULT_GEMINI_MODEL
+            const gemKey = LocalStorage.getGeminiApiKey()
+            apiKey.value = gemKey
+        } else {
+            apiEndpoint.value = DEFAULT_API_ENDPOINT
+            selectedModel.value = DEFAULT_MODEL_ID
+            const openaiKey = LocalStorage.getApiKey()
+            apiKey.value = openaiKey
+        }
+    },
+    { immediate: false }
+)
+
+watch(
     selectedModel,
     (newModel: string) => {
         const trimmed = newModel.trim()
@@ -318,26 +426,11 @@ watch(
     { immediate: false }
 )
 
-// 注释掉：监听风格和提示词变化时清除结果的逻辑
-// 改进：保留已生成的图片，让用户可以参考上次结果来调整参数
-// watch([selectedStyle, customPrompt], () => {
-//     if (result.value || error.value) {
-//         result.value = null
-//         error.value = null
-//     }
-// })
-
-watch(
-    textToImagePrompt,
-    () => {
-        if (textToImageError.value) {
-            textToImageError.value = null
-        }
-    },
-    { immediate: false }
-)
-
 const handleFetchModels = async () => {
+    if (apiFormat.value === 'gemini') {
+        modelsError.value = 'Gemini 原生模式无需拉取模型列表'
+        return
+    }
     if (!apiKey.value.trim() || !apiEndpoint.value.trim()) return
 
     isFetchingModels.value = true
@@ -487,44 +580,75 @@ const pushImageToUpload = (image: string | null) => {
     selectedImages.value = [image, ...filtered]
 }
 
+const shouldUseBatchMode = computed(() => batchEnabled.value && selectedImages.value.length > 0)
+
+const resolvedConcurrency = computed(() => Math.max(1, Math.min(8, Math.floor(concurrencyLimit.value) || 1)))
+
+const resolvedCooldown = computed(() => Math.max(0, Math.floor(queueCooldownMs.value) || 0))
+
+const isBatchProcessing = computed(() => batchResults.value.some(item => item.processing))
+
 const displayLoading = computed(() => {
-    if (latestResultSource.value === 'image') return isLoading.value
-    if (latestResultSource.value === 'text') return isTextToImageLoading.value
-    return isLoading.value || isTextToImageLoading.value
+    if (isBatchProcessing.value) return false
+    return isLoading.value
 })
+
+const displayResultList = computed(() => batchResults.value)
 
 const displayResult = computed(() => {
-    if (latestResultSource.value === 'image') return result.value
-    if (latestResultSource.value === 'text') return textToImageResult.value
-    return result.value || textToImageResult.value
+    if (batchResults.value.length > 0) return null
+    return result.value
 })
 
-const displayError = computed(() => {
-    if (latestResultSource.value === 'image') return error.value
-    if (latestResultSource.value === 'text') return textToImageError.value
-    return error.value || textToImageError.value
+const displayError = computed(() => error.value)
+
+const canPushDisplayResult = computed(() => {
+    const hasBatchOutput = batchResults.value.some(item => item.output)
+    if (hasBatchOutput) return true
+    return Boolean(displayResult.value)
 })
 
-const canPushDisplayResult = computed(() => Boolean(displayResult.value))
-
-const canGenerateTextImage = computed(
-    () =>
-        apiKey.value.trim() &&
-        apiEndpoint.value.trim() &&
-        selectedModel.value.trim() &&
-        textToImagePrompt.value.trim() &&
-        !isTextToImageLoading.value
-)
+const modeLabel = computed(() => (selectedImages.value.length > 0 ? '图文生图' : '文生图'))
 
 const canGenerate = computed(
     () =>
         apiKey.value.trim() &&
         apiEndpoint.value.trim() &&
         selectedModel.value.trim() &&
-        selectedImages.value.length > 0 &&
-        (selectedStyle.value || customPrompt.value.trim()) &&
+        promptInput.value.trim() &&
         !isLoading.value
 )
+
+const buildRequest = (prompt: string, images: string[]): GenerateRequest => {
+    const endpoint =
+        apiFormat.value === 'gemini'
+            ? apiEndpoint.value.trim() || DEFAULT_GEMINI_ENDPOINT
+            : apiEndpoint.value.trim() || DEFAULT_API_ENDPOINT
+    const model =
+        apiFormat.value === 'gemini'
+            ? selectedModel.value.trim() || DEFAULT_GEMINI_MODEL
+            : selectedModel.value.trim() || DEFAULT_MODEL_ID
+
+    const request: GenerateRequest = {
+        prompt,
+        images,
+        apikey: apiKey.value,
+        endpoint,
+        model,
+        apiFormat: apiFormat.value
+    }
+
+    if (showAspectRatioSelector.value) {
+        request.aspectRatio = selectedAspectRatio.value
+    }
+
+    if (showGemini3ProConfig.value) {
+        request.imageSize = gemini3ImageSize.value
+        request.enableGoogleSearch = gemini3EnableGoogleSearch.value
+    }
+
+    return request
+}
 
 // 判断是否显示宽高比选择器（Gemini 2.5 Flash Image 系列和 Gemini 3 Pro Image 模型时显示）
 const showAspectRatioSelector = computed(() => {
@@ -545,60 +669,37 @@ const showGemini3ProConfig = computed(() => {
     return modelId.includes('gemini-3-pro-image')
 })
 
-const handleTextToImageGenerate = async () => {
-    if (!canGenerateTextImage.value) return
-
-    latestResultSource.value = 'text'
-    isTextToImageLoading.value = true
-    textToImageError.value = null
-    textToImageResult.value = null
-
-    try {
-        const request: GenerateRequest = {
-            prompt: textToImagePrompt.value,
-            images: [],
-            apikey: apiKey.value,
-            endpoint: apiEndpoint.value.trim() || DEFAULT_API_ENDPOINT,
-            model: selectedModel.value.trim() || DEFAULT_MODEL_ID
-        }
-
-        // 如果显示宽高比选择器（Gemini 2.5 Flash Image 模型），则添加 aspectRatio 参数
-        if (showAspectRatioSelector.value) {
-            request.aspectRatio = selectedAspectRatio.value
-        }
-
-        // 如果显示 Gemini 3 Pro Image 配置，则添加相应参数
-        if (showGemini3ProConfig.value) {
-            request.imageSize = gemini3ImageSize.value
-            request.enableGoogleSearch = gemini3EnableGoogleSearch.value
-        }
-
-        const response = await generateImage(request)
-        textToImageResult.value = response.imageUrl
-        latestResultSource.value = 'text'
-    } catch (err) {
-        textToImageError.value = err instanceof Error ? err.message : '生成失败'
-        textToImageResult.value = null
-    } finally {
-        isTextToImageLoading.value = false
-    }
-}
-
-const handlePushTextImageToUpload = () => {
-    pushImageToUpload(textToImageResult.value)
-}
-
 const handlePushDisplayResult = () => {
     pushImageToUpload(displayResult.value)
 }
 
-const handleDownloadResult = async () => {
-    const image = displayResult.value
+const handlePushItem = (index: number) => {
+    const target = displayResultList.value[index]
+    if (!target?.output) return
+    pushImageToUpload(target.output)
+}
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+const resolveExtension = (image: string, contentType?: string | null): string => {
+    const dataMatch = image.match(/^data:image\/([a-zA-Z0-9+]+);/)
+    if (dataMatch?.[1]) {
+        return dataMatch[1]
+    }
+    if (contentType?.includes('jpeg') || contentType?.includes('jpg')) return 'jpg'
+    if (contentType?.includes('png')) return 'png'
+    if (contentType?.includes('webp')) return 'webp'
+    if (contentType?.includes('gif')) return 'gif'
+    return 'png'
+}
+
+const downloadImageAsset = async (image: string | null, suffix: string) => {
     if (!image) return
     if (typeof window === 'undefined') return
 
     let downloadUrl = image
     let revokeUrl: string | null = null
+    let extension = resolveExtension(image)
 
     try {
         if (!image.startsWith('data:')) {
@@ -606,14 +707,12 @@ const handleDownloadResult = async () => {
             const blob = await response.blob()
             downloadUrl = URL.createObjectURL(blob)
             revokeUrl = downloadUrl
+            extension = resolveExtension(image, response.headers.get('Content-Type'))
         }
 
         const link = document.createElement('a')
-        const dataMatch = image.match(/^data:image\/([a-zA-Z0-9+]+);/)
-        const extension = dataMatch ? dataMatch[1] : 'png'
-
         link.href = downloadUrl
-        link.download = `nano-banana-${Date.now()}.${extension}`
+        link.download = `nano-banana-${suffix}.${extension}`
         link.rel = 'noopener'
         document.body.appendChild(link)
         link.click()
@@ -627,55 +726,160 @@ const handleDownloadResult = async () => {
     }
 }
 
+const handleDownloadResult = async () => {
+    await downloadImageAsset(displayResult.value, `${Date.now()}`)
+}
+
+const handleDownloadItem = async (index: number) => {
+    const item = displayResultList.value[index]
+    if (!item?.output) return
+    const batchId = currentBatchId.value || Date.now().toString()
+    await downloadImageAsset(item.output, `${batchId}-${item.seq}`)
+}
+
+const handleDownloadAll = async () => {
+    const batchId = currentBatchId.value || Date.now().toString()
+    const outputs = displayResultList.value.filter(item => item.output)
+
+    for (let i = 0; i < outputs.length; i++) {
+        const item = outputs[i]
+        await downloadImageAsset(item.output as string, `${batchId}-${item.seq}`)
+    }
+}
+
+const runConcurrentTasks = async (tasks: Array<() => Promise<void>>, limit: number) => {
+    const launchSpacingMs = 500
+    const workerCount = Math.min(limit, tasks.length)
+    let cursor = 0
+
+    const workers = Array.from({ length: workerCount }, async () => {
+        while (cursor < tasks.length) {
+            const current = cursor
+            cursor += 1
+            await delay(current * launchSpacingMs)
+            await tasks[current]()
+        }
+    })
+
+    await Promise.all(workers)
+}
+
+const runQueuedTasks = async (tasks: Array<() => Promise<void>>, cooldown: number) => {
+    for (let i = 0; i < tasks.length; i++) {
+        await tasks[i]()
+        if (i < tasks.length - 1 && cooldown > 0) {
+            await delay(cooldown)
+        }
+    }
+}
+
+const handleUpdateItemPrompt = (index: number, value: string) => {
+    const target = batchResults.value[index]
+    if (!target) return
+    batchResults.value[index] = { ...target, prompt: value }
+}
+
+const handleRetryItem = async (index: number) => {
+    const target = batchResults.value[index]
+    if (!target) return
+
+    batchResults.value[index] = { ...target, processing: true, error: null }
+
+    try {
+        const response = await generateImage(buildRequest(target.prompt.trim() || promptInput.value.trim(), [target.input]))
+        batchResults.value[index] = { ...target, output: response.imageUrl, error: null, processing: false }
+    } catch (err) {
+        batchResults.value[index] = {
+            ...target,
+            output: null,
+            error: err instanceof Error ? err.message : '生成失败',
+            processing: false
+        }
+    }
+}
+
 const handleGenerate = async () => {
     if (!canGenerate.value) return
 
-    latestResultSource.value = 'image'
+    if (shouldUseBatchMode.value && batchMode.value === 'concurrent' && lastBatchCompletedAt.value) {
+        const elapsed = Date.now() - lastBatchCompletedAt.value
+        const waitMs = Math.max(0, Math.floor(batchCooldownMs.value) - elapsed)
+        if (waitMs > 0) {
+            await delay(waitMs)
+        }
+    }
+
     isLoading.value = true
     error.value = null
     // 立即清除之前的结果，确保用户看到新的生成过程
     result.value = null
+    batchResults.value = []
+    currentBatchId.value = ''
 
     try {
-        // 使用选中的样式模板或自定义提示词
-        const prompt = selectedStyle.value ? styleTemplates.find(t => t.id === selectedStyle.value)?.prompt || customPrompt.value : customPrompt.value
+        const prompt = promptInput.value.trim()
 
-        const request: GenerateRequest = {
-            prompt,
-            images: selectedImages.value,
-            apikey: apiKey.value,
-            endpoint: apiEndpoint.value.trim() || DEFAULT_API_ENDPOINT,
-            model: selectedModel.value.trim() || DEFAULT_MODEL_ID
+        if (shouldUseBatchMode.value) {
+            currentBatchId.value = Date.now().toString()
+            const imagesToProcess = [...selectedImages.value]
+            batchResults.value = imagesToProcess.map((image, idx) => ({
+                input: image,
+                output: null,
+                error: null,
+                seq: idx + 1,
+                prompt,
+                processing: true
+            }))
+
+            const tasks = imagesToProcess.map((image, index) => async () => {
+                try {
+                    const response = await generateImage(buildRequest(batchResults.value[index].prompt, [image]))
+                    batchResults.value[index] = {
+                        ...batchResults.value[index],
+                        output: response.imageUrl,
+                        error: null,
+                        processing: false
+                    }
+                } catch (taskError) {
+                    batchResults.value[index] = {
+                        ...batchResults.value[index],
+                        output: null,
+                        error: taskError instanceof Error ? taskError.message : '生成失败',
+                        processing: false
+                    }
+                }
+            })
+
+            if (batchMode.value === 'queue') {
+                await runQueuedTasks(tasks, resolvedCooldown.value)
+            } else {
+                await runConcurrentTasks(tasks, resolvedConcurrency.value)
+            }
+
+            const hasFailure = batchResults.value.some(item => item.error)
+            const hasSuccess = batchResults.value.some(item => item.output)
+
+            if (hasFailure && hasSuccess) {
+                error.value = '部分图片生成失败，请查看对应卡片提示'
+            } else if (hasFailure) {
+                error.value = '批量生成失败，请检查配置后重试'
+            } else {
+                error.value = null
+            }
+        } else {
+            const response = await generateImage(buildRequest(prompt, selectedImages.value))
+            result.value = response.imageUrl
         }
-
-        // 如果显示宽高比选择器（Gemini 2.5 Flash Image 模型），则添加 aspectRatio 参数
-        if (showAspectRatioSelector.value) {
-            request.aspectRatio = selectedAspectRatio.value
-        }
-
-        // 如果显示 Gemini 3 Pro Image 配置，则添加相应参数
-        if (showGemini3ProConfig.value) {
-            request.imageSize = gemini3ImageSize.value
-            request.enableGoogleSearch = gemini3EnableGoogleSearch.value
-        }
-
-        const response = await generateImage(request)
-        result.value = response.imageUrl
-        latestResultSource.value = 'image'
     } catch (err) {
         error.value = err instanceof Error ? err.message : '生成失败'
         // 生成失败时也要清除结果
         result.value = null
     } finally {
         isLoading.value = false
+        if (shouldUseBatchMode.value && batchMode.value === 'concurrent') {
+            lastBatchCompletedAt.value = Date.now()
+        }
     }
 }
 
-const handleReset = () => {
-    selectedImages.value = []
-    selectedStyle.value = ''
-    customPrompt.value = ''
-    result.value = null
-    error.value = null
-}
 </script>

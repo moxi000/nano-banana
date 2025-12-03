@@ -7,11 +7,23 @@ export interface GenerateRequest {
     aspectRatio?: string
     imageSize?: string
     enableGoogleSearch?: boolean
+    apiFormat?: ApiFormat
 }
 
 export interface GenerateResponse {
     imageUrl: string
 }
+
+export interface BatchResultItem {
+    input: string
+    output: string | null
+    error?: string | null
+    seq: number
+    prompt: string
+    processing?: boolean
+}
+
+export type ApiFormat = 'openai' | 'gemini'
 
 export interface ApiModel {
     id: string

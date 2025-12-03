@@ -6,6 +6,8 @@ export class LocalStorage {
     private static readonly API_ENDPOINT = 'nano-banana-api-endpoint'
     private static readonly MODEL_ID = 'nano-banana-model-id'
     private static readonly MODEL_CACHE = 'nano-banana-model-cache'
+    private static readonly API_FORMAT = 'nano-banana-api-format'
+    private static readonly API_KEY_GEMINI = 'nano-banana-api-key-gemini'
 
     // 保存API密钥
     static saveApiKey(apiKey: string): void {
@@ -32,6 +34,33 @@ export class LocalStorage {
             localStorage.removeItem(this.API_KEY)
         } catch (error) {
             console.warn('无法清除本地存储的API密钥:', error)
+        }
+    }
+    // 保存 Gemini API 密钥
+    static saveGeminiApiKey(apiKey: string): void {
+        try {
+            localStorage.setItem(this.API_KEY_GEMINI, apiKey)
+        } catch (error) {
+            console.warn('无法保存Gemini密钥到本地存储:', error)
+        }
+    }
+
+    // 获取 Gemini API 密钥
+    static getGeminiApiKey(): string {
+        try {
+            return localStorage.getItem(this.API_KEY_GEMINI) || ''
+        } catch (error) {
+            console.warn('无法从本地存储读取Gemini密钥:', error)
+            return ''
+        }
+    }
+
+    // 清除 Gemini API 密钥
+    static clearGeminiApiKey(): void {
+        try {
+            localStorage.removeItem(this.API_KEY_GEMINI)
+        } catch (error) {
+            console.warn('无法清除Gemini密钥:', error)
         }
     }
 
@@ -150,5 +179,22 @@ export class LocalStorage {
 
     private static normalizeEndpoint(endpoint: string): string {
         return endpoint.trim().replace(/\/$/, '').toLowerCase()
+    }
+
+    static saveApiFormat(format: string): void {
+        try {
+            localStorage.setItem(this.API_FORMAT, format)
+        } catch (error) {
+            console.warn('无法保存 API 格式到本地存储:', error)
+        }
+    }
+
+    static getApiFormat(): string {
+        try {
+            return localStorage.getItem(this.API_FORMAT) || ''
+        } catch (error) {
+            console.warn('无法获取本地存储的 API 格式:', error)
+            return ''
+        }
     }
 }
