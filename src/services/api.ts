@@ -289,7 +289,10 @@ function encodeBinaryToBase64(binary: string): string {
     throw new Error('无法进行 base64 编码')
 }
 
-export async function fetchModels(apikey: string, endpoint: string): Promise<ApiModel[]> {
+export async function fetchModels(apikey: string, endpoint: string, apiFormat: ApiFormat = 'openai'): Promise<ApiModel[]> {
+    if (apiFormat === 'gemini') {
+        return fetchModelsGemini(apikey, endpoint)
+    }
     const apiEndpoint = endpoint?.trim() || DEFAULT_API_ENDPOINT
     const modelsUrl = resolveModelsEndpoint(apiEndpoint)
 
@@ -314,6 +317,44 @@ export async function fetchModels(apikey: string, endpoint: string): Promise<Api
     }
 
     return models
+}
+
+async function fetchModelsGemini(apikey: string, endpoint: string): Promise<ApiModel[]> {
+    const base = (endpoint?.trim() || DEFAULT_GEMINI_ENDPOINT).replace(/\/$/, '')
+    const url = `${base}/models?pageSize=100`
+
+    const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apikey
+        }
+    })
+    if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`获取模型列表失败 ${response.status}: ${errorText}`)
+    }
+
+    const data: { models?: ApiModel[] } = await response.json()
+    const models = Array.isArray(data.models) ? data.models : []
+    if (!models.length) {
+        throw new Error('模型列表为空')
+    }
+    return models.map(model => {
+        const name = (model as any).name || ''
+        const normalizedId = name.startsWith('models/') ? name.replace(/^models\//, '') : name || (model as any).id || ''
+        const supportsContent = Array.isArray((model as any).supportedGenerationMethods)
+            ? (model as any).supportedGenerationMethods.includes('generateContent')
+            : false
+        return {
+            ...model,
+            id: normalizedId,
+            description: model.description || (model as any).displayName || '',
+            capabilities: {
+                image: supportsContent
+            }
+        }
+    })
 }
 
 function resolveModelsEndpoint(endpoint: string): string {

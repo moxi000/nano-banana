@@ -284,6 +284,13 @@ const currentBatchId = ref('')
 const lastBatchCompletedAt = ref<number | null>(null)
 let hasSyncedInitialEndpoint = false
 
+const GEMINI_MODEL_OPTIONS: ModelOption[] = [
+    { id: 'gemini-3-pro-image-preview', label: 'gemini-3-pro-image-preview', description: 'Gemini 3 Pro Image', supportsImages: true },
+    { id: 'gemini-2.0-flash-exp', label: 'gemini-2.0-flash-exp', description: 'Gemini 2 Flash Experimental', supportsImages: true },
+    { id: 'gemini-2.0-flash', label: 'gemini-2.0-flash', description: 'Gemini 2 Flash', supportsImages: true },
+    { id: 'gemini-2.5-flash-image-preview', label: 'gemini-2.5-flash-image-preview', description: 'Gemini 2.5 Flash Image', supportsImages: true }
+]
+
 // Gemini 3 Pro Image 配置状态
 const gemini3ImageSize = ref('2K')  // 默认图像尺寸
 const gemini3EnableGoogleSearch = ref(false)  // 默认不启用谷歌搜索
@@ -296,7 +303,7 @@ onMounted(() => {
     }
     const savedApiKey = apiFormat.value === 'gemini' ? LocalStorage.getGeminiApiKey() : LocalStorage.getApiKey()
     const savedEndpoint = LocalStorage.getApiEndpoint()
-    const savedModelId = LocalStorage.getModelId()
+    const savedModelId = apiFormat.value === 'gemini' ? LocalStorage.getGeminiModelId() : LocalStorage.getModelId()
 
     if (savedApiKey) {
         apiKey.value = savedApiKey
@@ -312,7 +319,11 @@ onMounted(() => {
     const modelIdToUse = savedModelId.trim() || (apiFormat.value === 'gemini' ? DEFAULT_GEMINI_MODEL : DEFAULT_MODEL_ID)
 
     // 恢复模型缓存
-    restoreModelOptionsFromCache(endpointToUse)
+    if (apiFormat.value === 'gemini') {
+        modelOptions.value = GEMINI_MODEL_OPTIONS
+    } else {
+        restoreModelOptionsFromCache(endpointToUse)
+    }
 
     // 设置值（这些赋值会触发 watch，但此时 hasSyncedInitialEndpoint 还是 false）
     selectedModel.value = modelIdToUse
@@ -344,7 +355,7 @@ watch(
             if ((previousApiKey || '').trim()) {
                 LocalStorage.clearModelCache()
                 modelOptions.value = []
-                selectedModel.value = DEFAULT_MODEL_ID
+                selectedModel.value = apiFormat.value === 'gemini' ? DEFAULT_GEMINI_MODEL : DEFAULT_MODEL_ID
                 modelsError.value = null
             }
             showApiSettings.value = true
@@ -393,11 +404,14 @@ watch(
             selectedModel.value = DEFAULT_GEMINI_MODEL
             const gemKey = LocalStorage.getGeminiApiKey()
             apiKey.value = gemKey
+            modelOptions.value = GEMINI_MODEL_OPTIONS
+            modelsError.value = null
         } else {
             apiEndpoint.value = DEFAULT_API_ENDPOINT
             selectedModel.value = DEFAULT_MODEL_ID
             const openaiKey = LocalStorage.getApiKey()
             apiKey.value = openaiKey
+            restoreModelOptionsFromCache(DEFAULT_API_ENDPOINT)
         }
     },
     { immediate: false }
@@ -408,13 +422,21 @@ watch(
     (newModel: string) => {
         const trimmed = newModel.trim()
         if (trimmed) {
-            LocalStorage.saveModelId(trimmed)
+            if (apiFormat.value === 'gemini') {
+                LocalStorage.saveGeminiModelId(trimmed)
+            } else {
+                LocalStorage.saveModelId(trimmed)
+            }
         } else {
-            LocalStorage.clearModelId()
-            LocalStorage.clearModelCache(apiEndpoint.value)
+            if (apiFormat.value === 'gemini') {
+                LocalStorage.saveGeminiModelId(DEFAULT_GEMINI_MODEL)
+            } else {
+                LocalStorage.clearModelId()
+                LocalStorage.clearModelCache(apiEndpoint.value)
+            }
             // 避免在初始化时重置
             if (hasSyncedInitialEndpoint) {
-                selectedModel.value = DEFAULT_MODEL_ID
+                selectedModel.value = apiFormat.value === 'gemini' ? DEFAULT_GEMINI_MODEL : DEFAULT_MODEL_ID
                 showApiSettings.value = true
             }
         }
@@ -427,17 +449,13 @@ watch(
 )
 
 const handleFetchModels = async () => {
-    if (apiFormat.value === 'gemini') {
-        modelsError.value = 'Gemini 原生模式无需拉取模型列表'
-        return
-    }
     if (!apiKey.value.trim() || !apiEndpoint.value.trim()) return
 
     isFetchingModels.value = true
     modelsError.value = null
 
     try {
-        const rawModels = await fetchModels(apiKey.value, apiEndpoint.value)
+        const rawModels = await fetchModels(apiKey.value, apiEndpoint.value, apiFormat.value)
         const options = mapModelsToOptions(rawModels)
 
         if (!options.length) {
@@ -457,33 +475,49 @@ const handleFetchModels = async () => {
         ensureSelectedOptionPresent()
     } catch (fetchError) {
         modelsError.value = fetchError instanceof Error ? fetchError.message : '无法获取模型列表'
-        modelOptions.value = []
-        selectedModel.value = DEFAULT_MODEL_ID
+        if (apiFormat.value === 'gemini') {
+            // 回退到预置列表，避免卡死
+            modelOptions.value = GEMINI_MODEL_OPTIONS
+            selectedModel.value = GEMINI_MODEL_OPTIONS[0]?.id || DEFAULT_GEMINI_MODEL
+        } else {
+            modelOptions.value = []
+            selectedModel.value = DEFAULT_MODEL_ID
+        }
     } finally {
         isFetchingModels.value = false
     }
 }
 
 const mapModelsToOptions = (models: ApiModel[]): ModelOption[] => {
+    const normalizeModelId = (id: string) => id.replace(/^models\//i, '').trim()
     const uniqueIds = new Set<string>()
+    const usedLabels = new Set<string>()
     const options: ModelOption[] = []
 
     models.forEach(model => {
-        if (!model?.id || uniqueIds.has(model.id)) return
-        uniqueIds.add(model.id)
+        const rawId = model?.id || ''
+        const normalizedId = normalizeModelId(rawId)
+        if (!normalizedId || uniqueIds.has(normalizedId)) return
+        uniqueIds.add(normalizedId)
 
-        const supportsImages = detectImageSupport(model)
-        const label = buildModelLabel(model)
+        const modelWithNormalized = { ...model, id: normalizedId }
+
+        const supportsImages = detectImageSupport(modelWithNormalized)
+        const label = buildModelLabel(modelWithNormalized)
+        const labelKey = label.toLowerCase()
+        if (usedLabels.has(labelKey)) return
+
         const description = (typeof model.description === 'string' && model.description.trim()) ||
             (typeof (model as Record<string, unknown>).about === 'string' && String((model as Record<string, unknown>).about).trim()) ||
             ''
 
         options.push({
-            id: model.id,
+            id: normalizedId,
             label,
             description,
             supportsImages
         })
+        usedLabels.add(labelKey)
     })
 
     return options.sort((a, b) => {
@@ -512,12 +546,16 @@ const detectImageSupport = (model: ApiModel): boolean => {
 }
 
 const buildModelLabel = (model: ApiModel): string => {
+    const clean = (value: string) => value.replace(/^models\//i, '').trim()
+    if (model.displayName && typeof (model as any).displayName === 'string' && (model as any).displayName.trim()) {
+        return clean((model as any).displayName as string)
+    }
     if (model.name && typeof model.name === 'string' && model.name.trim()) {
-        return model.name.trim()
+        return clean(model.name)
     }
     const segments = model.id.split('/')
     const lastSegment = segments[segments.length - 1]
-    return lastSegment || model.id
+    return clean(lastSegment || model.id)
 }
 
 const handleModelPicked = () => {
@@ -544,7 +582,7 @@ const restoreModelOptionsFromCache = (endpoint: string) => {
 }
 
 const ensureSelectedOptionPresent = () => {
-    const currentId = selectedModel.value.trim()
+    const currentId = selectedModel.value.trim().replace(/^models\//i, '')
     if (!currentId) return
 
     const exists = modelOptions.value.some(option => option.id === currentId)
@@ -571,7 +609,7 @@ const ensureSelectedOptionPresent = () => {
 const buildFallbackLabel = (modelId: string): string => {
     const segments = modelId.split('/')
     const lastSegment = segments[segments.length - 1]
-    return lastSegment || modelId
+    return (lastSegment || modelId).replace(/^models\//i, '')
 }
 
 const pushImageToUpload = (image: string | null) => {

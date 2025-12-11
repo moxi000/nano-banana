@@ -80,25 +80,22 @@
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <button
                         @click="$emit('fetch-models')"
-                        :disabled="!canFetchModels || modelLoading || apiFormat === 'gemini'"
+                        :disabled="!canFetchModels || modelLoading"
                         :class="[
                             'px-3 py-2 rounded-lg border-2 border-black font-semibold text-sm transition-colors shadow-sm flex items-center justify-center gap-2',
                             modelLoading
                                 ? 'bg-gray-300 text-gray-600 cursor-wait'
-                                : apiFormat === 'gemini'
-                                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                                  : canFetchModels
+                                : canFetchModels
                                     ? 'bg-purple-500 text-white hover:bg-purple-600'
                                     : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                         ]"
                     >
                         <span v-if="modelLoading">⏳ 正在获取...</span>
-                        <span v-else-if="apiFormat === 'gemini'">Gemini 原生暂不拉取列表</span>
                         <span v-else>📥 获取模型列表</span>
                     </button>
-                    <span v-if="models.length && apiFormat !== 'gemini'" class="text-xs text-gray-600">已载入 {{ models.length }} 个模型</span>
+                    <span v-if="models.length" class="text-xs text-gray-600">已载入 {{ models.length }} 个模型</span>
                 </div>
-                <p v-if="modelError && apiFormat !== 'gemini'" class="text-xs text-red-600 mt-2">⚠️ {{ modelError }}</p>
+                <p v-if="modelError" class="text-xs text-red-600 mt-2">⚠️ {{ modelError }}</p>
 
                 <div class="mt-3">
                     <label class="block text-xs font-semibold text-gray-600 mb-1">选择文生图模型</label>
@@ -159,7 +156,7 @@ const resetEndpoint = () => {
 }
 
 const isCustomEndpoint = computed(() => endpoint.value !== '' && endpoint.value !== DEFAULT_API_ENDPOINT)
-const canFetchModels = computed(() => apiFormat.value === 'openai' && modelValue.value.trim() !== '' && endpoint.value.trim() !== '')
+const canFetchModels = computed(() => modelValue.value.trim() !== '' && endpoint.value.trim() !== '')
 const optionList = computed<ModelOption[]>(() => {
     if (models.value.length) {
         return models.value

@@ -5,6 +5,7 @@ export class LocalStorage {
     private static readonly API_KEY = 'nano-banana-api-key'
     private static readonly API_ENDPOINT = 'nano-banana-api-endpoint'
     private static readonly MODEL_ID = 'nano-banana-model-id'
+    private static readonly MODEL_ID_GEMINI = 'nano-banana-model-id-gemini'
     private static readonly MODEL_CACHE = 'nano-banana-model-cache'
     private static readonly API_FORMAT = 'nano-banana-api-format'
     private static readonly API_KEY_GEMINI = 'nano-banana-api-key-gemini'
@@ -107,6 +108,23 @@ export class LocalStorage {
             return localStorage.getItem(this.MODEL_ID) || ''
         } catch (error) {
             console.warn('无法从本地存储读取模型ID:', error)
+            return ''
+        }
+    }
+
+    static saveGeminiModelId(modelId: string): void {
+        try {
+            localStorage.setItem(this.MODEL_ID_GEMINI, modelId)
+        } catch (error) {
+            console.warn('无法保存Gemini模型ID到本地存储:', error)
+        }
+    }
+
+    static getGeminiModelId(): string {
+        try {
+            return localStorage.getItem(this.MODEL_ID_GEMINI) || ''
+        } catch (error) {
+            console.warn('无法获取Gemini模型ID:', error)
             return ''
         }
     }
